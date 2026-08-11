@@ -1,104 +1,138 @@
-# Local SOCKS5 Proxy
+# Local SOCKS5 Proxy v1.5.0
 
-Локальный SOCKS5-прокси с автоматическим failover для Telegram и других приложений. 
-Объединяет списки проверенных прокси, балансирует нагрузку, автоматически обновляется.
+Локальный SOCKS5-прокси с failover для Telegram. Автоматически загружает списки проверенных прокси, балансирует нагрузку, обновляется и отправляет уведомления в Telegram.
 
-## Возможности
+## Что нового в v1.5.0
 
-- SOCKS5-прокси на `0.0.0.0:1080` для всей локальной сети
-- Автоматическая загрузка списков прокси из GitHub
-- Поддержка протоколов: VLESS, Trojan, VMess, Shadowsocks, Hysteria2
-- Балансировка между прокси (random)
-- Автоустановка Xray при первом запуске
-- Healthcheck — проверка работоспособности каждые 5 минут с автоперезапуском
-- Telegram-уведомления о статусе, ошибках, обновлениях
-- Автозапуск при включении ПК, по расписанию (8:00-20:00)
-- Интерактивная установка (фаервол + задачи) одной командой `--setup`
+- **Автообновление** — скрипт проверяет GitHub и сам заменяет exe при выходе новой версии
+- **Миграция config.json** — недостающие поля добавляются автоматически, старые настройки не теряются
+- **Балансировка** — выбор стратегии: `leastPing` (быстрейший) или `random` (случайный)
+- **Ротация логов** — `local-socks.log` не растёт бесконечно (лимит 1 МБ)
+- **`--status`** — показать текущий статус (порт, healthcheck, стратегия)
+- **`--test`** — быстрая проверка healthcheck
+- **`--ignoreupdate`** — запретить автообновление
+- **Исправлен healthcheck** — curl с `-s -L -o NUL`, без ложных FAIL
+- **Исправлена валидация конфига Xray** — логи ошибок сохраняются для отладки
 
-## Установка
+## Быстрый старт
 
-1. Скачай `local-socks.exe`
-2. Запусти от администратора:
-**local-socks.exe --setup**
+1. Скачай `local-socks_V1.5.0.exe`
+2. Запусти от **администратора**:
+local-socks_V1.5.0.exe --setup
+
+text
 3. При первом запуске создастся `config.json` с настройками по умолчанию
-4. Для Telegram-уведомлений — впиши bot_token и chat_id в `config.json`
+4. Для Telegram-уведомлений — впиши `bot_token` и `chat_id` в `config.json`
+
+## Команды
+
+| Команда | Описание |
+|---------|----------|
+| `local-socks.exe` | Запустить/обновить прокси |
+| `local-socks.exe --setup` | Интерактивная установка (фаервол + задачи) |
+| `local-socks.exe --monitor` | Healthcheck (запускается автоматически) |
+| `local-socks.exe --status` | Показать статус |
+| `local-socks.exe --test` | Проверить healthcheck и выйти |
+| `local-socks.exe --update` | Принудительное обновление |
+| `local-socks.exe --ignoreupdate` | Запретить автообновление при этом запуске |
 
 ## config.json
 
 ```json
 {
- "listen_port": 1080,          // Порт SOCKS5
- "max_proxies": 20,            // Максимум прокси (чтобы не перегружать Xray)
- "xray": {
-     "executable": "xray/xray.exe",  // Путь к Xray (скачается автоматически)
-     "download_url": "..."           // Откуда скачать Xray
+ "version": "1.5.0",
+ "listen_port": 1080,
+ "max_proxies": 20,
+ "balancer": {
+     "strategy": "leastPing",
+     "observatory": {
+         "probeUrl": "https://t.me",
+         "probeInterval": "5m"
+     }
  },
- "sources": [                       // Ссылки на списки прокси
-     "https://.../failover-tg-top10.txt",
-     "https://.../YT+TG.txt"
+ "xray": {
+     "executable": "xray/xray.exe",
+     "download_url": "https://github.com/XTLS/Xray-core/releases/latest/download/Xray-windows-64.zip"
+ },
+ "sources": [
+     "https://raw.githubusercontent.com/.../failover-tg-top10.txt",
+     "https://raw.githubusercontent.com/.../YT+TG.txt"
  ],
  "telegram": {
-     "enabled": false,          // Включить уведомления
-     "bot_token": "",           // Токен бота
-     "chat_id": ""              // ID чата
+     "enabled": false,
+     "bot_token": "",
+     "chat_id": ""
  },
  "healthcheck": {
-     "enabled": true,           // Проверять curl'ом
+     "enabled": true,
      "target_url": "https://t.me",
-     "timeout_sec": 8
+     "timeout_sec": 12,
+     "retry_count": 2
  },
  "schedule": {
-     "enabled": true,           // Создавать задачи в планировщике
-     "start_time": "08:00",     // Запуск SOCKS5
-     "stop_time": "20:00",      // Остановка SOCKS5
-     "refresh_interval_min": 60 // Обновление списка прокси
+     "enabled": true,
+     "start_time": "08:00",
+     "stop_time": "20:00",
+     "refresh_interval_min": 60
+ },
+ "update": {
+     "enabled": true,
+     "check_url": "https://raw.githubusercontent.com/.../version.txt",
+     "download_url": "https://raw.githubusercontent.com/.../local-socks_V1.5.0.exe"
  }
 }
+Стратегии балансировки
+Значение	Описание
+leastPing	Самый быстрый прокси (требует Observatory)
+random	Случайный выбор (надёжнее, но не оптимальный по скорости)
+Если leastPing вызывает проблемы (healthcheck FAIL, таймауты) — смените на random.
 
+Автообновление
+При запуске скрипт проверяет update.check_url (файл version.txt в репо)
 
-**Использование**
-Команда	Описание
-local-socks.exe	Запустить/обновить прокси
-local-socks.exe --setup	Интерактивная установка (от админа)
-local-socks.exe --monitor	Healthcheck (автоматически по расписанию)
-Задачи в планировщике (после --setup)
+Сравнивает с текущей версией
+
+Если есть новая — скачивает exe из update.download_url, заменяет, перезапускается
+
+Старый exe сохраняется как *.old
+
+Задачи в планировщике
 Задача	Когда	Что делает
-LocalSocks_Boot	При включении ПК	Запуск SOCKS5
-LocalSocks_Start	8:00 ежедневно	Запуск SOCKS5
-LocalSocks_Stop	20:00 ежедневно	Остановка Xray
+LocalSocks_Boot	При включении ПК	Запуск
+LocalSocks_Start	8:00	Запуск
+LocalSocks_Stop	20:00	Остановка
 LocalSocks_Refresh	Каждый час	Обновление списка прокси
-LocalSocks_Monitor	Каждые 5 минут	Healthcheck + автоперезапуск
+LocalSocks_Monitor	Каждые 5 минут	Healthcheck + перезапуск
 Подключение клиентов
 Тип: SOCKS5
 
-Адрес: IP_компьютера (например 192.168.1.30)
+Адрес: IP компьютера (например 192.168.1.30)
+
 Порт: 1080
+
 Аутентификация: нет
 
 Telegram-уведомления
-Создай бота через @BotFather
-Получи bot_token
-Напиши боту, потом получи chat_id через https://api.telegram.org/bot<TOKEN>/getUpdates
-Впиши в config.json → telegram.enabled: true
+Создайте бота через @BotFather
 
-Уведомления:
+Получите bot_token
 
-🟢 Запуск прокси
-🔄 Обновление конфига
-⚠️ Healthcheck fail
-❌ Ошибки
+Напишите боту, затем получите chat_id: https://api.telegram.org/bot<TOKEN>/getUpdates
 
-Как работает healthcheck
-Каждые 5 минут:
-curl --socks5 127.0.0.1:1080 https://t.me -I
-Если FAIL → перезапуск Xray
-Если снова FAIL → полный перезапуск с обновлением списка прокси
-Telegram-уведомление при каждом сбое
+В config.json: telegram.enabled = true, впишите токен и chat_id
+
+Уведомления отправляются через SOCKS5 (если прокси жив) или напрямую.
 
 Файлы
 text
-local-socks.exe          # Основной exe
-config.json              # Настройки (создаётся при первом запуске)
-output/local-socks.log   # Лог
-configs/local-socks.json # Сгенерированный конфиг Xray
-xray/xray.exe            # Xray (скачивается автоматически)
+local-socks_V1.5.0.exe     # Основной файл
+config.json                 # Настройки (создаётся автоматически)
+output/local-socks.log      # Лог (ротация при 1 МБ)
+configs/local-socks.json    # Конфиг Xray
+xray/xray.exe               # Xray (скачивается автоматически)
+Обновление с предыдущих версий
+Скачайте новый exe
+
+Замените старый (задачи в планировщике обновятся автоматически при --setup)
+
+Старый config.json совместим — недостающие поля добавятся при первом запуске
