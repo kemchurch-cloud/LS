@@ -53,14 +53,16 @@ text
  "enabled": true,
  "proxy_url": "vless://uuid@host:port?security=reality&sni=..."
 }
-Мульти-target healthcheck
+
+## Мульти-target healthcheck
 Можно проверять несколько сервисов:
 
-json
+```json
 "healthcheck": {
     "targets": ["https://t.me", "https://www.youtube.com", "https://www.tiktok.com"]
 }
-Задачи в планировщике
+
+**Задачи в планировщике**
 Задача	Когда
 LocalSocks_Boot	При включении ПК
 LocalSocks_Start	8:00
